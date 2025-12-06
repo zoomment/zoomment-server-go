@@ -1,0 +1,46 @@
+version: "3.8"
+
+services:
+  # MongoDB database
+  mongo:
+    image: mongo:7
+    restart: always
+    volumes:
+      - mongo-data:/data/db
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Zoomment API server
+  zoomment-server:
+    build: .
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - MONGODB_URI=mongodb://mongo:27017/zoomment
+      - JWT_SECRET=${JWT_SECRET:-your-super-secret-key-change-in-production}
+      - DASHBOARD_URL=${DASHBOARD_URL:-http://localhost:3000}
+      - BRAND_NAME=${BRAND_NAME:-Zoomment}
+      - GIN_MODE=release
+      # Email config (optional)
+      - BOT_EMAIL_ADDR=${BOT_EMAIL_ADDR:-}
+      - BOT_EMAIL_PASS=${BOT_EMAIL_PASS:-}
+      - BOT_EMAIL_HOST=${BOT_EMAIL_HOST:-smtp.gmail.com}
+      - BOT_EMAIL_PORT=${BOT_EMAIL_PORT:-465}
+    depends_on:
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  mongo-data:
