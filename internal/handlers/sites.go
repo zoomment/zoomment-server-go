@@ -16,12 +16,8 @@ import (
 	"zoomment-server/internal/middleware"
 	"zoomment-server/internal/models"
 	"zoomment-server/internal/services/metadata"
+	"zoomment-server/internal/validators"
 )
-
-// AddSiteRequest is the request body for adding a site
-type AddSiteRequest struct {
-	URL string `json:"url" binding:"required,url"`
-}
 
 // ListSites returns all sites for the current user
 // GET /api/sites
@@ -43,7 +39,7 @@ func ListSites(c *gin.Context) {
 // POST /api/sites
 func AddSite(cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var req AddSiteRequest
+		var req validators.AddSiteRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			errors.BadRequest("Invalid URL").Response(c)
 			return

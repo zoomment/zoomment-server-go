@@ -17,12 +17,8 @@ import (
 	"zoomment-server/internal/models"
 	"zoomment-server/internal/services/mailer"
 	"zoomment-server/internal/utils"
+	"zoomment-server/internal/validators"
 )
-
-// AuthRequest is the request body for authentication
-type AuthRequest struct {
-	Email string `json:"email" binding:"required,email"`
-}
 
 // AuthUser handles magic link authentication
 // POST /api/users/auth
@@ -31,7 +27,7 @@ func AuthUser(cfg *config.Config) gin.HandlerFunc {
 	mailService := mailer.New(cfg)
 
 	return func(c *gin.Context) {
-		var req AuthRequest
+		var req validators.AuthRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			errors.BadRequest("Invalid email").Response(c)
 			return

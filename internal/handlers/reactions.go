@@ -11,13 +11,8 @@ import (
 
 	"zoomment-server/internal/errors"
 	"zoomment-server/internal/models"
+	"zoomment-server/internal/validators"
 )
-
-// AddReactionRequest is the request body for adding a reaction
-type AddReactionRequest struct {
-	PageID   string `json:"pageId" binding:"required"`
-	Reaction string `json:"reaction" binding:"required"`
-}
 
 // ListReactions returns reactions for a page
 // GET /api/reactions?pageId=xxx
@@ -42,7 +37,7 @@ func ListReactions(c *gin.Context) {
 // AddReaction adds or toggles a reaction
 // POST /api/reactions
 func AddReaction(c *gin.Context) {
-	var req AddReactionRequest
+	var req validators.AddReactionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		errors.BadRequest("Invalid request").Response(c)
 		return
