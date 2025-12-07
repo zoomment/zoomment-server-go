@@ -41,8 +41,3 @@ func Connect(uri string) error {
 	log.Println("✅ Connected to MongoDB")
 	return nil
 }
-
-// GetCollection returns a collection for a model
-func GetCollection(model mgm.Model) *mgm.Collection {
-	return mgm.Coll(model)
-}

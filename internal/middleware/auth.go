@@ -4,7 +4,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/kamva/mgm/v3"
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"zoomment-server/internal/config"
@@ -129,14 +128,3 @@ func Access(level ...string) gin.HandlerFunc {
 		c.AbortWithStatusJSON(403, gin.H{"message": "Forbidden"})
 	}
 }
-
-// FindUserByEmail finds a user by email address
-func FindUserByEmail(email string) (*models.User, error) {
-	user := &models.User{}
-	err := mgm.Coll(user).First(bson.M{"email": email}, user)
-	if err != nil {
-		return nil, err
-	}
-	return user, nil
-}
-

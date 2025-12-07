@@ -12,6 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"zoomment-server/internal/config"
+	"zoomment-server/internal/errors"
 	"zoomment-server/internal/middleware"
 	"zoomment-server/internal/models"
 	"zoomment-server/internal/services/metadata"
@@ -31,7 +32,7 @@ func ListSites(c *gin.Context) {
 	opts := options.Find().SetSort(bson.D{{Key: "_id", Value: -1}})
 	err := mgm.Coll(&models.Site{}).SimpleFind(&sites, bson.M{"userId": user.ID}, opts)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to fetch sites"})
+		errors.ErrDatabaseError.Response(c)
 		return
 	}
 
@@ -44,7 +45,7 @@ func AddSite(cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req AddSiteRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid URL"})
+			errors.BadRequest("Invalid URL").Response(c)
 			return
 		}
 
@@ -53,7 +54,7 @@ func AddSite(cfg *config.Config) gin.HandlerFunc {
 		// Parse URL
 		parsedURL, err := url.Parse(req.URL)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid URL"})
+			errors.BadRequest("Invalid URL").Response(c)
 			return
 		}
 
@@ -62,7 +63,7 @@ func AddSite(cfg *config.Config) gin.HandlerFunc {
 		// Fetch and verify the zoomment meta tag
 		token, err := metadata.FetchSiteToken(parsedURL.String())
 		if err != nil || token != user.ID.Hex() {
-			c.JSON(http.StatusNotFound, gin.H{"message": "Meta tag not found"})
+			errors.NotFound("Meta tag").Response(c)
 			return
 		}
 
@@ -71,11 +72,11 @@ func AddSite(cfg *config.Config) gin.HandlerFunc {
 		err = mgm.Coll(existingSite).First(bson.M{"domain": domain}, existingSite)
 		if err == nil {
 			// Node.js uses 401 here (unusual but we match it for compatibility)
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "Website already exists"})
+			errors.Conflict("Website already exists").Response(c)
 			return
 		}
 		if err != mongo.ErrNoDocuments {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "Database error"})
+			errors.ErrDatabaseError.Response(c)
 			return
 		}
 
@@ -88,7 +89,7 @@ func AddSite(cfg *config.Config) gin.HandlerFunc {
 
 		err = mgm.Coll(site).Create(site)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to create site"})
+			errors.ErrDatabaseError.Response(c)
 			return
 		}
 
@@ -105,7 +106,7 @@ func DeleteSite(c *gin.Context) {
 	// Convert string to ObjectID
 	objID, err := primitive.ObjectIDFromHex(siteID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid site ID"})
+		errors.BadRequest("Invalid site ID").Response(c)
 		return
 	}
 
@@ -115,12 +116,12 @@ func DeleteSite(c *gin.Context) {
 		"userId": user.ID,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to delete site"})
+		errors.ErrDatabaseError.Response(c)
 		return
 	}
 
 	if result.DeletedCount == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"message": "Site not found"})
+		errors.NotFound("Site").Response(c)
 		return
 	}
 

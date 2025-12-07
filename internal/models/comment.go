@@ -45,37 +45,3 @@ type CommentOwner struct {
 func (c *Comment) CollectionName() string {
 	return "comments"
 }
-
-// CommentPublicData is what we return to clients (no sensitive data)
-type CommentPublicData struct {
-	ID         interface{}         `json:"_id"`
-	Author     string              `json:"author"`
-	Gravatar   string              `json:"gravatar"`
-	Body       string              `json:"body"`
-	ParentID   *string             `json:"parentId,omitempty"`
-	IsVerified bool                `json:"isVerified"`
-	IsOwn      bool                `json:"isOwn"`
-	CreatedAt  interface{}         `json:"createdAt"`
-	Owner      *CommentOwner       `json:"owner,omitempty"`
-	Replies    []CommentPublicData `json:"replies,omitempty"`
-}
-
-// ToPublicData converts a Comment to public-safe data
-func (c *Comment) ToPublicData(currentUserEmail string) CommentPublicData {
-	isOwn := currentUserEmail != "" && currentUserEmail == c.Email
-
-	return CommentPublicData{
-		ID:         c.ID,
-		Author:     c.Author,
-		Gravatar:   c.Gravatar,
-		Body:       c.Body,
-		ParentID:   c.ParentID,
-		IsVerified: c.IsVerified,
-		IsOwn:      isOwn,
-		CreatedAt:  c.CreatedAt,
-		Owner: &CommentOwner{
-			Name:     c.Author,
-			Gravatar: c.Gravatar,
-		},
-	}
-}

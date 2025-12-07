@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"net/http"
 	"net/url"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"zoomment-server/internal/config"
+	"zoomment-server/internal/errors"
 	"zoomment-server/internal/logger"
 	"zoomment-server/internal/middleware"
 	"zoomment-server/internal/models"
@@ -31,22 +31,21 @@ func ListComments(c *gin.Context) {
 
 	// Validation: require at least one parameter
 	if pageID == "" && domain == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
+		errors.BadRequest("Bad request").Response(c)
 		return
 	}
 
 	// Validate length limits
 	if len(pageID) > 500 || len(domain) > 253 {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
+		errors.BadRequest("Bad request").Response(c)
 		return
 	}
 
 	// Fetch comments with replies in a SINGLE query (no N+1 problem!)
 	comments, err := repository.GetCommentsWithReplies(pageID, domain)
 	if err != nil {
-		// Log the actual error for debugging
 		logger.Error(err, "Failed to fetch comments")
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to fetch comments"})
+		errors.ErrDatabaseError.Response(c)
 		return
 	}
 
@@ -77,14 +76,14 @@ func AddComment(cfg *config.Config) gin.HandlerFunc {
 
 		// Validate request body
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid request body"})
+			errors.BadRequest("Invalid request body").Response(c)
 			return
 		}
 
 		// Parse URL to get domain
 		parsedURL, err := url.Parse(req.PageURL)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid page URL"})
+			errors.BadRequest("Invalid page URL").Response(c)
 			return
 		}
 
@@ -119,7 +118,7 @@ func AddComment(cfg *config.Config) gin.HandlerFunc {
 		err = mgm.Coll(comment).Create(comment)
 		if err != nil {
 			logger.Error(err, "Failed to create comment")
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to create comment"})
+			errors.ErrDatabaseError.Response(c)
 			return
 		}
 
@@ -183,7 +182,7 @@ func DeleteComment(c *gin.Context) {
 	// Convert string to ObjectID
 	objID, err := primitive.ObjectIDFromHex(commentID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid comment ID"})
+		errors.BadRequest("Invalid comment ID").Response(c)
 		return
 	}
 
@@ -199,19 +198,19 @@ func DeleteComment(c *gin.Context) {
 		// Authenticated user deletion
 		query["email"] = utils.CleanEmail(user.Email)
 	} else {
-		c.JSON(http.StatusForbidden, gin.H{"message": "Forbidden"})
+		errors.ErrForbidden.Response(c)
 		return
 	}
 
 	// Delete comment
 	result, err := mgm.Coll(&models.Comment{}).DeleteOne(mgm.Ctx(), query)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to delete comment"})
+		errors.ErrDatabaseError.Response(c)
 		return
 	}
 
 	if result.DeletedCount == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"message": "Comment not found"})
+		errors.NotFound("Comment").Response(c)
 		return
 	}
 
@@ -228,7 +227,7 @@ func ListCommentsBySite(c *gin.Context) {
 	// Convert string to ObjectID
 	objID, err := primitive.ObjectIDFromHex(siteID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "Site not found"})
+		errors.NotFound("Site").Response(c)
 		return
 	}
 
@@ -236,13 +235,13 @@ func ListCommentsBySite(c *gin.Context) {
 	site := &models.Site{}
 	err = mgm.Coll(site).FindByID(objID, site)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "Site not found"})
+		errors.NotFound("Site").Response(c)
 		return
 	}
 
 	// Check ownership (same as Node.js)
 	if site.UserID != user.ID {
-		c.JSON(http.StatusNotFound, gin.H{"message": "Site not found"})
+		errors.NotFound("Site").Response(c)
 		return
 	}
 
@@ -251,7 +250,7 @@ func ListCommentsBySite(c *gin.Context) {
 	opts := options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}})
 	err = mgm.Coll(&models.Comment{}).SimpleFind(&comments, bson.M{"domain": site.Domain}, opts)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to fetch comments"})
+		errors.ErrDatabaseError.Response(c)
 		return
 	}
 

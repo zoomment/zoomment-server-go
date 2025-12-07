@@ -9,6 +9,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 
+	"zoomment-server/internal/errors"
 	"zoomment-server/internal/models"
 )
 
@@ -25,13 +26,13 @@ func ListReactions(c *gin.Context) {
 	fingerprint := c.GetHeader("fingerprint")
 
 	if pageID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "pageId is required"})
+		errors.BadRequest("pageId is required").Response(c)
 		return
 	}
 
 	response, err := getPageReactions(pageID, fingerprint)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to fetch reactions"})
+		errors.ErrDatabaseError.Response(c)
 		return
 	}
 
@@ -43,13 +44,13 @@ func ListReactions(c *gin.Context) {
 func AddReaction(c *gin.Context) {
 	var req AddReactionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid request"})
+		errors.BadRequest("Invalid request").Response(c)
 		return
 	}
 
 	fingerprint := c.GetHeader("fingerprint")
 	if fingerprint == "" {
-		// Node.js uses 500 and sends plain text
+		// Node.js uses 500 and sends plain text - keep for compatibility
 		c.String(http.StatusInternalServerError, "Fingerprint required for reacting.")
 		return
 	}
@@ -63,7 +64,7 @@ func AddReaction(c *gin.Context) {
 	// Parse domain from pageId
 	parsedURL, err := url.Parse("https://" + req.PageID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid pageId"})
+		errors.BadRequest("Invalid pageId").Response(c)
 		return
 	}
 	domain := parsedURL.Hostname()
@@ -98,14 +99,14 @@ func AddReaction(c *gin.Context) {
 			mgm.Coll(existingReaction).Update(existingReaction)
 		}
 	} else {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Database error"})
+		errors.ErrDatabaseError.Response(c)
 		return
 	}
 
 	// Return updated reactions
 	response, err := getPageReactions(req.PageID, fingerprint)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to fetch reactions"})
+		errors.ErrDatabaseError.Response(c)
 		return
 	}
 

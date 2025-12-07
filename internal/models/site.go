@@ -18,12 +18,3 @@ type Site struct {
 func (s *Site) CollectionName() string {
 	return "sites"
 }
-
-// NewSite creates a new site with default values
-func NewSite(userID primitive.ObjectID, domain string) *Site {
-	return &Site{
-		UserID:   userID,
-		Domain:   domain,
-		Verified: false,
-	}
-}

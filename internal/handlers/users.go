@@ -11,6 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 
 	"zoomment-server/internal/config"
+	"zoomment-server/internal/errors"
 	"zoomment-server/internal/logger"
 	"zoomment-server/internal/middleware"
 	"zoomment-server/internal/models"
@@ -32,7 +33,7 @@ func AuthUser(cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req AuthRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid email"})
+			errors.BadRequest("Invalid email").Response(c)
 			return
 		}
 
@@ -48,12 +49,12 @@ func AuthUser(cfg *config.Config) gin.HandlerFunc {
 				user = models.NewUser(email)
 				if err := mgm.Coll(user).Create(user); err != nil {
 					logger.Error(err, "Failed to create user")
-					c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to create user"})
+					errors.ErrDatabaseError.Response(c)
 					return
 				}
 			} else {
 				logger.Error(err, "Database error finding user")
-				c.JSON(http.StatusInternalServerError, gin.H{"message": "Database error"})
+				errors.ErrDatabaseError.Response(c)
 				return
 			}
 		}
@@ -69,7 +70,7 @@ func AuthUser(cfg *config.Config) gin.HandlerFunc {
 		tokenString, err := token.SignedString([]byte(cfg.JWTSecret))
 		if err != nil {
 			logger.Error(err, "Failed to generate token")
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to generate token"})
+			errors.ErrInternalError.Response(c)
 			return
 		}
 
@@ -92,7 +93,7 @@ func GetProfile(c *gin.Context) {
 	user := middleware.GetUser(c)
 
 	if user == nil {
-		c.JSON(http.StatusForbidden, gin.H{"message": "Forbidden"})
+		errors.ErrForbidden.Response(c)
 		return
 	}
 
@@ -110,7 +111,7 @@ func DeleteUser(c *gin.Context) {
 	user := middleware.GetUser(c)
 
 	if user == nil {
-		c.JSON(http.StatusForbidden, gin.H{"message": "Forbidden"})
+		errors.ErrForbidden.Response(c)
 		return
 	}
 
@@ -120,7 +121,7 @@ func DeleteUser(c *gin.Context) {
 	result, err := mgm.Coll(&models.User{}).DeleteOne(mgm.Ctx(), bson.M{"_id": user.ID})
 	if err != nil {
 		logger.Error(err, "Failed to delete user")
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to delete user"})
+		errors.ErrDatabaseError.Response(c)
 		return
 	}
 
@@ -130,6 +131,6 @@ func DeleteUser(c *gin.Context) {
 	if result.DeletedCount > 0 {
 		c.JSON(http.StatusOK, gin.H{"_id": userID})
 	} else {
-		c.JSON(http.StatusNotFound, gin.H{"message": "Account not found"})
+		errors.NotFound("Account").Response(c)
 	}
 }

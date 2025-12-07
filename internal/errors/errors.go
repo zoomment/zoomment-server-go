@@ -111,21 +111,34 @@ func BadRequest(message string) *AppError {
 }
 
 // Response sends an error response to the client
+// Format: {"message": "...", "code": "...", "details": ...}
+// "message" is always present (Node.js compatible), others are optional
 func (e *AppError) Response(c *gin.Context) {
-	c.JSON(e.StatusCode, gin.H{
-		"error":   e.Code,
-		"message": e.Message,
-		"details": e.Details,
-	})
+	response := gin.H{"message": e.Message}
+
+	// Add optional fields only if they have values
+	if e.Code != "" {
+		response["code"] = e.Code
+	}
+	if e.Details != nil {
+		response["details"] = e.Details
+	}
+
+	c.JSON(e.StatusCode, response)
 }
 
 // Abort sends an error response and aborts the request
 func (e *AppError) Abort(c *gin.Context) {
-	c.AbortWithStatusJSON(e.StatusCode, gin.H{
-		"error":   e.Code,
-		"message": e.Message,
-		"details": e.Details,
-	})
+	response := gin.H{"message": e.Message}
+
+	if e.Code != "" {
+		response["code"] = e.Code
+	}
+	if e.Details != nil {
+		response["details"] = e.Details
+	}
+
+	c.AbortWithStatusJSON(e.StatusCode, response)
 }
 
 // HandleError is a helper to respond with an error
