@@ -70,8 +70,8 @@ func GetCommentsWithReplies(pageID, domain string) ([]CommentWithReplies, error)
 		// Stage 1: Match top-level comments (no parent)
 		{{Key: "$match", Value: matchCondition}},
 
-		// Stage 2: Sort by creation date
-		{{Key: "$sort", Value: bson.D{{Key: "createdAt", Value: 1}}}},
+		// Stage 2: Sort by creation date (newest first)
+		{{Key: "$sort", Value: bson.D{{Key: "createdAt", Value: -1}}}},
 
 		// Stage 3: Lookup (JOIN) replies from the same collection
 		{{Key: "$lookup", Value: bson.M{
@@ -82,8 +82,8 @@ func GetCommentsWithReplies(pageID, domain string) ([]CommentWithReplies, error)
 				{{Key: "$match", Value: bson.M{
 					"$expr": bson.M{"$eq": bson.A{"$parentId", "$$parentId"}},
 				}}},
-				// Sort replies by date
-				{{Key: "$sort", Value: bson.D{{Key: "createdAt", Value: 1}}}},
+				// Sort replies by date (newest first)
+				{{Key: "$sort", Value: bson.D{{Key: "createdAt", Value: -1}}}},
 			},
 			"as": "replies", // Output field name
 		}}},
