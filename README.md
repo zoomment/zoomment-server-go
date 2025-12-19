@@ -8,6 +8,7 @@ An open-source, self-hosted comment system API built with Go. This is a Go port 
 
 - 💬 **Threaded comments** with nested replies
 - 👍 **Emoji reactions** for quick feedback
+- 👥 **Visitor tracking** with unique visitor counts
 - 🔐 **Passwordless authentication** via magic links
 - 📧 **Email notifications** for comments and verification
 - 🌐 **Multi-site support** with domain verification
@@ -166,6 +167,12 @@ make docker-logs    # View logs
 |--------|----------------------------|------|--------------------------|
 | GET    | `/api/reactions?pageId=xxx` | -    | Get reactions for page   |
 | POST   | `/api/reactions`            | -    | Add/toggle reaction      |
+
+### Visitors
+
+| Method | Endpoint                    | Auth | Description                                    |
+|--------|----------------------------|------|------------------------------------------------|
+| GET    | `/api/visitors?pageId=xxx`  | -    | Get visitor count (records visit if fingerprint provided) |
 
 > 📖 **Full API documentation**: Visit `http://localhost:8080/swagger/index.html` when server is running
 

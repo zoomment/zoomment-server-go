@@ -284,6 +284,45 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/visitors": {
+            "get": {
+                "summary": "Get visitor count",
+                "description": "Get visitor count for a page. If fingerprint header is provided, records the visit (idempotent).",
+                "tags": ["Visitors"],
+                "parameters": [
+                    {
+                        "name": "pageId",
+                        "in": "query",
+                        "required": true,
+                        "type": "string",
+                        "description": "Page identifier"
+                    },
+                    {
+                        "name": "fingerprint",
+                        "in": "header",
+                        "type": "string",
+                        "description": "Unique visitor identifier (optional, records visit if provided)"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Visitor count",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "count": {
+                                    "type": "integer",
+                                    "description": "Number of unique visitors for the page"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - pageId is required"
+                    }
+                }
+            }
         }
     },
     "definitions": {

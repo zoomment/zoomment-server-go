@@ -30,6 +30,9 @@ func Setup(router *gin.Engine, cfg *config.Config) {
 
 		// Reactions routes
 		setupReactionRoutes(api)
+
+		// Visitors routes
+		setupVisitorRoutes(api)
 	}
 }
 
@@ -77,6 +80,16 @@ func setupReactionRoutes(api *gin.RouterGroup) {
 		reactions.GET("", handlers.ListReactions)
 		reactions.POST("/", handlers.AddReaction)
 		reactions.POST("", handlers.AddReaction)
+	}
+}
+
+// setupVisitorRoutes configures /api/visitors routes
+func setupVisitorRoutes(api *gin.RouterGroup) {
+	visitors := api.Group("/visitors")
+	{
+		// Register both with and without trailing slash since RedirectTrailingSlash is disabled
+		visitors.GET("/", handlers.ListVisitors)
+		visitors.GET("", handlers.ListVisitors)
 	}
 }
 
