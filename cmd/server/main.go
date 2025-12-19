@@ -42,9 +42,22 @@ func main() {
 
 	// Create router
 	router := gin.New()
+	router.RedirectTrailingSlash = false
+	router.RedirectFixedPath = false
+	
+	// Configure CORS to allow fingerprint header
+	corsConfig := cors.Config{
+		AllowAllOrigins:  true,
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Length", "Content-Type", "Authorization", "fingerprint", "token"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: false,
+		MaxAge:           12 * 3600, // 12 hours
+	}
+	router.Use(cors.New(corsConfig))
+	
 	router.Use(logger.GinLogger())
 	router.Use(gin.Recovery())
-	router.Use(cors.Default())
 	router.Use(middleware.Auth(cfg))
 
 	// Swagger documentation
