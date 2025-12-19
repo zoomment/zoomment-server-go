@@ -49,7 +49,13 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "List of comments with replies"
+                        "description": "List of comments with replies",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Comment"
+                            }
+                        }
                     },
                     "400": {
                         "description": "Bad request - pageId or domain required"
@@ -80,8 +86,11 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "201": {
-                        "description": "Comment created"
+                    "200": {
+                        "description": "Comment created",
+                        "schema": {
+                            "$ref": "#/definitions/Comment"
+                        }
                     },
                     "400": {
                         "description": "Validation error"
@@ -111,7 +120,16 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Comment deleted"
+                        "description": "Comment deleted",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "_id": {
+                                    "type": "string",
+                                    "description": "Deleted comment ID"
+                                }
+                            }
+                        }
                     },
                     "403": {
                         "description": "Forbidden"
@@ -264,6 +282,83 @@ const docTemplate = `{
                     "200": {
                         "description": "Reaction updated"
                     }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "Comment": {
+            "type": "object",
+            "properties": {
+                "_id": {
+                    "type": "string",
+                    "description": "Comment ID"
+                },
+                "parentId": {
+                    "type": "string",
+                    "description": "Parent comment ID for replies"
+                },
+                "author": {
+                    "type": "string",
+                    "description": "Comment author name"
+                },
+                "email": {
+                    "type": "string",
+                    "description": "Comment author email"
+                },
+                "gravatar": {
+                    "type": "string",
+                    "description": "Gravatar URL"
+                },
+                "body": {
+                    "type": "string",
+                    "description": "Comment body (HTML)"
+                },
+                "domain": {
+                    "type": "string",
+                    "description": "Domain where comment was posted"
+                },
+                "pageUrl": {
+                    "type": "string",
+                    "description": "Full page URL"
+                },
+                "pageId": {
+                    "type": "string",
+                    "description": "Page identifier"
+                },
+                "isVerified": {
+                    "type": "boolean",
+                    "description": "Whether comment author is verified"
+                },
+                "isOwn": {
+                    "type": "boolean",
+                    "description": "Whether comment belongs to current user"
+                },
+                "owner": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string"
+                        },
+                        "gravatar": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "createdAt": {
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "updatedAt": {
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "replies": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/Comment"
+                    },
+                    "description": "Nested replies to this comment"
                 }
             }
         }

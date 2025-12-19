@@ -37,8 +37,11 @@ func Setup(router *gin.Engine, cfg *config.Config) {
 func setupCommentRoutes(api *gin.RouterGroup, cfg *config.Config) {
 	comments := api.Group("/comments")
 	{
+		// Register both with and without trailing slash since RedirectTrailingSlash is disabled
 		comments.GET("/", handlers.ListComments)
+		comments.GET("", handlers.ListComments)
 		comments.POST("/", handlers.AddComment(cfg))
+		comments.POST("", handlers.AddComment(cfg))
 		comments.DELETE("/:id", handlers.DeleteComment)
 		// Node.js uses access('admin') for this route
 		comments.GET("/sites/:siteId", middleware.Access("admin"), handlers.ListCommentsBySite)
@@ -69,8 +72,11 @@ func setupSiteRoutes(api *gin.RouterGroup, cfg *config.Config) {
 func setupReactionRoutes(api *gin.RouterGroup) {
 	reactions := api.Group("/reactions")
 	{
+		// Register both with and without trailing slash since RedirectTrailingSlash is disabled
 		reactions.GET("/", handlers.ListReactions)
+		reactions.GET("", handlers.ListReactions)
 		reactions.POST("/", handlers.AddReaction)
+		reactions.POST("", handlers.AddReaction)
 	}
 }
 

@@ -123,8 +123,23 @@ func AddComment(cfg *config.Config) gin.HandlerFunc {
 			return
 		}
 
-		// Return 200 OK (same as Node.js)
-		c.JSON(http.StatusOK, comment)
+		// Return 200 OK with _id instead of id
+		response := gin.H{
+			"_id":        comment.ID.Hex(),
+			"parentId":   comment.ParentID,
+			"author":     comment.Author,
+			"email":      comment.Email,
+			"gravatar":   comment.Gravatar,
+			"body":       comment.Body,
+			"domain":     comment.Domain,
+			"pageUrl":    comment.PageURL,
+			"pageId":     comment.PageID,
+			"isVerified": comment.IsVerified,
+			"owner":      comment.Owner,
+			"createdAt":  comment.CreatedAt,
+			"updatedAt":  comment.UpdatedAt,
+		}
+		c.JSON(http.StatusOK, response)
 
 		// Send email notifications asynchronously (don't block the response)
 		go func() {
@@ -260,5 +275,25 @@ func ListCommentsBySite(c *gin.Context) {
 		comments = []models.Comment{}
 	}
 
-	c.JSON(http.StatusOK, comments)
+	// Convert to response with _id instead of id
+	response := make([]gin.H, 0, len(comments))
+	for _, comment := range comments {
+		response = append(response, gin.H{
+			"_id":        comment.ID.Hex(),
+			"parentId":   comment.ParentID,
+			"author":     comment.Author,
+			"email":      comment.Email,
+			"gravatar":   comment.Gravatar,
+			"body":       comment.Body,
+			"domain":     comment.Domain,
+			"pageUrl":    comment.PageURL,
+			"pageId":     comment.PageID,
+			"isVerified": comment.IsVerified,
+			"owner":      comment.Owner,
+			"createdAt":  comment.CreatedAt,
+			"updatedAt":  comment.UpdatedAt,
+		})
+	}
+
+	c.JSON(http.StatusOK, response)
 }
