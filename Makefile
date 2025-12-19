@@ -1,8 +1,28 @@
-.PHONY: dev build run test lint clean docker-build docker-up docker-down
+.PHONY: dev dev-air build run test lint clean docker-build docker-up docker-down
 
-# Development
+# Development (manual - requires rebuild on changes)
 dev:
 	go run cmd/server/main.go
+
+# Development with auto-reload (requires: go install github.com/air-verse/air@latest)
+dev-air:
+	@if command -v air &> /dev/null; then \
+		air; \
+	elif [ -f "$(HOME)/go/bin/air" ]; then \
+		$(HOME)/go/bin/air; \
+	else \
+		echo "❌ Air not found!"; \
+		echo ""; \
+		echo "Install Air with:"; \
+		echo "  go install github.com/air-verse/air@latest"; \
+		echo ""; \
+		echo "Then add to your PATH (add to ~/.zshrc):"; \
+		echo "  export PATH=\$$PATH:\$$HOME/go/bin"; \
+		echo ""; \
+		echo "Or run directly:"; \
+		echo "  ~/go/bin/air"; \
+		exit 1; \
+	fi
 
 # Build binary
 build:
@@ -47,6 +67,17 @@ docker-logs:
 # Install development tools
 install-tools:
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
+# Install Air for auto-reload
+install-air:
+	@echo "Installing Air..."
+	go install github.com/air-verse/air@latest
+	@echo "✅ Air installed!"
+	@echo ""
+	@echo "Add to your PATH (add to ~/.zshrc):"
+	@echo "  export PATH=\$$PATH:\$$HOME/go/bin"
+	@echo ""
+	@echo "Or run directly: ~/go/bin/air"
 
 # Generate swagger docs (after installing swag)
 swagger:
