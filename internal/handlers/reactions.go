@@ -9,6 +9,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 
+	"zoomment-server/internal/constants"
 	"zoomment-server/internal/errors"
 	"zoomment-server/internal/models"
 	"zoomment-server/internal/validators"
@@ -52,8 +53,8 @@ func AddReaction(c *gin.Context) {
 
 	// Limit reaction length (just in case)
 	reaction := req.Reaction
-	if len(reaction) > 20 {
-		reaction = reaction[:20]
+	if len(reaction) > constants.MaxReactionLength {
+		reaction = reaction[:constants.MaxReactionLength]
 	}
 
 	// Parse domain from pageId

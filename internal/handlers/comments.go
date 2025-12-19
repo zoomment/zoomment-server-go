@@ -13,6 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"zoomment-server/internal/config"
+	"zoomment-server/internal/constants"
 	"zoomment-server/internal/errors"
 	"zoomment-server/internal/logger"
 	"zoomment-server/internal/middleware"
@@ -37,7 +38,7 @@ func ListComments(c *gin.Context) {
 	}
 
 	// Validate length limits
-	if len(pageID) > 500 || len(domain) > 253 {
+	if len(pageID) > constants.MaxPageIDLength || len(domain) > constants.MaxDomainLength {
 		errors.BadRequest("Bad request").Response(c)
 		return
 	}
@@ -124,22 +125,7 @@ func AddComment(cfg *config.Config) gin.HandlerFunc {
 		}
 
 		// Return 200 OK with _id instead of id
-		response := gin.H{
-			"_id":        comment.ID.Hex(),
-			"parentId":   comment.ParentID,
-			"author":     comment.Author,
-			"email":      comment.Email,
-			"gravatar":   comment.Gravatar,
-			"body":       comment.Body,
-			"domain":     comment.Domain,
-			"pageUrl":    comment.PageURL,
-			"pageId":     comment.PageID,
-			"isVerified": comment.IsVerified,
-			"owner":      comment.Owner,
-			"createdAt":  comment.CreatedAt,
-			"updatedAt":  comment.UpdatedAt,
-		}
-		c.JSON(http.StatusOK, response)
+		c.JSON(http.StatusOK, commentToResponse(comment))
 
 		// Send email notifications asynchronously (don't block the response)
 		go func() {
@@ -160,9 +146,14 @@ func AddComment(cfg *config.Config) gin.HandlerFunc {
 					"id":    commenterUser.ID.Hex(),
 					"email": email,
 					"name":  author,
-					"exp":   time.Now().Add(365 * 24 * time.Hour).Unix(),
+					"exp":   time.Now().Add(constants.JWTExpirationHours * time.Hour).Unix(),
 				})
-				tokenString, _ := token.SignedString([]byte(cfg.JWTSecret))
+				tokenString, err := token.SignedString([]byte(cfg.JWTSecret))
+				if err != nil {
+					logger.Error(err, "Failed to sign JWT token for verification email")
+					// Continue without verification email rather than failing
+					return
+				}
 
 				// Send verification email
 				mailService.SendEmailVerification(email, tokenString, comment.PageURL)
@@ -179,7 +170,7 @@ func AddComment(cfg *config.Config) gin.HandlerFunc {
 					// Don't notify if the commenter is the site owner
 					mailService.SendCommentNotification(siteOwner.Email, mailer.CommentData{
 						Author:  author,
-						Date:    comment.CreatedAt.Format("02 Jan 2006 - 15:04"),
+						Date:    comment.CreatedAt.Format(constants.DateFormat),
 						PageURL: comment.PageURL,
 						Body:    body,
 					})
@@ -276,24 +267,5 @@ func ListCommentsBySite(c *gin.Context) {
 	}
 
 	// Convert to response with _id instead of id
-	response := make([]gin.H, 0, len(comments))
-	for _, comment := range comments {
-		response = append(response, gin.H{
-			"_id":        comment.ID.Hex(),
-			"parentId":   comment.ParentID,
-			"author":     comment.Author,
-			"email":      comment.Email,
-			"gravatar":   comment.Gravatar,
-			"body":       comment.Body,
-			"domain":     comment.Domain,
-			"pageUrl":    comment.PageURL,
-			"pageId":     comment.PageID,
-			"isVerified": comment.IsVerified,
-			"owner":      comment.Owner,
-			"createdAt":  comment.CreatedAt,
-			"updatedAt":  comment.UpdatedAt,
-		})
-	}
-
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, commentsToResponse(comments))
 }

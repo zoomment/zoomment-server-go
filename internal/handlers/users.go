@@ -11,6 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 
 	"zoomment-server/internal/config"
+	"zoomment-server/internal/constants"
 	"zoomment-server/internal/errors"
 	"zoomment-server/internal/logger"
 	"zoomment-server/internal/middleware"
@@ -60,7 +61,7 @@ func AuthUser(cfg *config.Config) gin.HandlerFunc {
 			"id":    user.ID.Hex(),
 			"email": user.Email,
 			"name":  user.Name,
-			"exp":   time.Now().Add(365 * 24 * time.Hour).Unix(), // 1 year
+			"exp":   time.Now().Add(constants.JWTExpirationHours * time.Hour).Unix(), // 1 year
 		})
 
 		tokenString, err := token.SignedString([]byte(cfg.JWTSecret))
