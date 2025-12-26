@@ -79,8 +79,7 @@ func AuthUser(cfg *config.Config) gin.HandlerFunc {
 			}
 		}()
 
-		// Return same format as Node.js
-		c.JSON(http.StatusOK, gin.H{"message": "Magic link sent to your email"})
+		c.JSON(http.StatusOK, MessageResponse{Message: "Magic link sent to your email"})
 	}
 }
 
@@ -94,11 +93,10 @@ func GetProfile(c *gin.Context) {
 		return
 	}
 
-	// Match Node.js response format exactly
-	c.JSON(http.StatusOK, gin.H{
-		"name":  user.Name,
-		"email": user.Email,
-		"id":    user.ID.Hex(),
+	c.JSON(http.StatusOK, UserProfileResponse{
+		ID:    user.ID.Hex(),
+		Name:  user.Name,
+		Email: user.Email,
 	})
 }
 
@@ -125,9 +123,10 @@ func DeleteUser(c *gin.Context) {
 	// Delete user's sites
 	mgm.Coll(&models.Site{}).DeleteMany(mgm.Ctx(), bson.M{"userId": user.ID})
 
-	if result.DeletedCount > 0 {
-		c.JSON(http.StatusOK, gin.H{"_id": userID})
-	} else {
+	if result.DeletedCount == 0 {
 		errors.NotFound("Account").Response(c)
+		return
 	}
+
+	c.JSON(http.StatusOK, NewDeletedResponse(userID))
 }

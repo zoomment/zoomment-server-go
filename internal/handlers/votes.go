@@ -22,9 +22,9 @@ type VoteRequest struct {
 
 // Vote handles voting on a comment (upvote/downvote)
 // POST /api/votes
-// If no vote exists: create vote
-// If same vote exists: remove vote (toggle off)
-// If opposite vote exists: update vote
+// - If no vote exists: create vote
+// - If same vote exists: remove vote (toggle off)
+// - If opposite vote exists: update vote
 func Vote(c *gin.Context) {
 	fingerprint := c.GetHeader("fingerprint")
 	if fingerprint == "" {
@@ -38,13 +38,7 @@ func Vote(c *gin.Context) {
 		return
 	}
 
-	// Validate value
-	if req.Value != 1 && req.Value != -1 {
-		errors.BadRequest("value must be 1 (upvote) or -1 (downvote)").Response(c)
-		return
-	}
-
-	// Check if comment exists
+	// Verify comment exists
 	commentObjID, err := primitive.ObjectIDFromHex(req.CommentID)
 	if err != nil {
 		errors.BadRequest("Invalid comment ID").Response(c)
@@ -52,52 +46,19 @@ func Vote(c *gin.Context) {
 	}
 
 	comment := &models.Comment{}
-	err = mgm.Coll(comment).FindByID(commentObjID, comment)
-	if err != nil {
+	if err := mgm.Coll(comment).FindByID(commentObjID, comment); err != nil {
 		errors.NotFound("Comment").Response(c)
 		return
 	}
 
-	// Find existing vote
-	existingVote := &models.Vote{}
-	err = mgm.Coll(existingVote).First(bson.M{
-		"commentId":   req.CommentID,
-		"fingerprint": fingerprint,
-	}, existingVote)
-
-	if err == mongo.ErrNoDocuments {
-		// Create new vote
-		newVote := &models.Vote{
-			CommentID:   req.CommentID,
-			Fingerprint: fingerprint,
-			Value:       req.Value,
-		}
-		if err := mgm.Coll(newVote).Create(newVote); err != nil {
-			errors.ErrDatabaseError.Response(c)
-			return
-		}
-	} else if err == nil {
-		if existingVote.Value == req.Value {
-			// Same vote - remove it (toggle off)
-			if _, err := mgm.Coll(existingVote).DeleteOne(mgm.Ctx(), bson.M{"_id": existingVote.ID}); err != nil {
-				errors.ErrDatabaseError.Response(c)
-				return
-			}
-		} else {
-			// Different vote - update it
-			existingVote.Value = req.Value
-			if err := mgm.Coll(existingVote).Update(existingVote); err != nil {
-				errors.ErrDatabaseError.Response(c)
-				return
-			}
-		}
-	} else {
+	// Handle vote logic
+	if err := processVote(req.CommentID, fingerprint, req.Value); err != nil {
 		errors.ErrDatabaseError.Response(c)
 		return
 	}
 
-	// Get updated vote counts
-	response, err := getVoteResponse(req.CommentID, fingerprint)
+	// Return updated vote counts
+	response, err := calculateVoteCounts(req.CommentID, fingerprint)
 	if err != nil {
 		errors.ErrDatabaseError.Response(c)
 		return
@@ -112,7 +73,7 @@ func GetVote(c *gin.Context) {
 	commentID := c.Param("commentId")
 	fingerprint := c.GetHeader("fingerprint")
 
-	response, err := getVoteResponse(commentID, fingerprint)
+	response, err := calculateVoteCounts(commentID, fingerprint)
 	if err != nil {
 		errors.ErrDatabaseError.Response(c)
 		return
@@ -132,76 +93,89 @@ func GetVotesBulk(c *gin.Context) {
 		return
 	}
 
-	commentIds := strings.Split(commentIdsParam, ",")
-	if len(commentIds) == 0 {
-		errors.BadRequest("commentIds is required").Response(c)
-		return
-	}
-
-	// Filter out empty strings
-	var filteredIds []string
-	for _, id := range commentIds {
-		if id = strings.TrimSpace(id); id != "" {
-			filteredIds = append(filteredIds, id)
-		}
-	}
-
+	// Parse and filter comment IDs
+	filteredIds := parseCommentIds(commentIdsParam)
 	if len(filteredIds) == 0 {
 		errors.BadRequest("commentIds is required").Response(c)
 		return
 	}
 
-	// Get all votes for these comments
+	// Fetch all votes for these comments
 	var votes []models.Vote
-	err := mgm.Coll(&models.Vote{}).SimpleFind(&votes, bson.M{
+	if err := mgm.Coll(&models.Vote{}).SimpleFind(&votes, bson.M{
 		"commentId": bson.M{"$in": filteredIds},
-	})
-	if err != nil {
+	}); err != nil {
 		errors.ErrDatabaseError.Response(c)
 		return
 	}
 
 	// Calculate counts per comment
 	result := make(map[string]models.VoteResponse)
-
 	for _, id := range filteredIds {
-		var upvotes, downvotes, userVote int
-
-		for _, vote := range votes {
-			if vote.CommentID == id {
-				if vote.Value == 1 {
-					upvotes++
-				} else if vote.Value == -1 {
-					downvotes++
-				}
-				if fingerprint != "" && vote.Fingerprint == fingerprint {
-					userVote = vote.Value
-				}
-			}
-		}
-
-		result[id] = models.VoteResponse{
-			CommentID: id,
-			Upvotes:   upvotes,
-			Downvotes: downvotes,
-			Score:     upvotes - downvotes,
-			UserVote:  userVote,
-		}
+		result[id] = aggregateVotes(id, votes, fingerprint)
 	}
 
 	c.JSON(http.StatusOK, result)
 }
 
-// getVoteResponse calculates vote counts for a comment
-func getVoteResponse(commentID, fingerprint string) (*models.VoteResponse, error) {
-	var votes []models.Vote
-	err := mgm.Coll(&models.Vote{}).SimpleFind(&votes, bson.M{"commentId": commentID})
+// ========================================
+// Helper Functions
+// ========================================
+
+// processVote handles the vote creation/update/deletion logic
+func processVote(commentID, fingerprint string, value int) error {
+	query := bson.M{
+		"commentId":   commentID,
+		"fingerprint": fingerprint,
+	}
+
+	existingVote := &models.Vote{}
+	err := mgm.Coll(existingVote).First(query, existingVote)
+
+	if err == mongo.ErrNoDocuments {
+		// Create new vote
+		newVote := &models.Vote{
+			CommentID:   commentID,
+			Fingerprint: fingerprint,
+			Value:       value,
+		}
+		return mgm.Coll(newVote).Create(newVote)
+	}
+
 	if err != nil {
+		return err
+	}
+
+	if existingVote.Value == value {
+		// Same vote - remove it (toggle off)
+		_, err = mgm.Coll(existingVote).DeleteOne(mgm.Ctx(), bson.M{"_id": existingVote.ID})
+		return err
+	}
+
+	// Different vote - update it
+	existingVote.Value = value
+	return mgm.Coll(existingVote).Update(existingVote)
+}
+
+// calculateVoteCounts fetches and calculates vote counts for a comment
+func calculateVoteCounts(commentID, fingerprint string) (*models.VoteResponse, error) {
+	var votes []models.Vote
+	if err := mgm.Coll(&models.Vote{}).SimpleFind(&votes, bson.M{"commentId": commentID}); err != nil {
 		return nil, err
 	}
 
+	response := aggregateVotes(commentID, votes, fingerprint)
+	return &response, nil
+}
+
+// aggregateVotes calculates vote counts from a slice of votes
+func aggregateVotes(commentID string, votes []models.Vote, fingerprint string) models.VoteResponse {
 	var upvotes, downvotes, userVote int
+
 	for _, vote := range votes {
+		if vote.CommentID != commentID {
+			continue
+		}
 		if vote.Value == 1 {
 			upvotes++
 		} else if vote.Value == -1 {
@@ -212,12 +186,22 @@ func getVoteResponse(commentID, fingerprint string) (*models.VoteResponse, error
 		}
 	}
 
-	return &models.VoteResponse{
+	return models.VoteResponse{
 		CommentID: commentID,
 		Upvotes:   upvotes,
 		Downvotes: downvotes,
 		Score:     upvotes - downvotes,
 		UserVote:  userVote,
-	}, nil
+	}
 }
 
+// parseCommentIds splits and trims the comma-separated comment IDs
+func parseCommentIds(param string) []string {
+	var result []string
+	for _, id := range strings.Split(param, ",") {
+		if id = strings.TrimSpace(id); id != "" {
+			result = append(result, id)
+		}
+	}
+	return result
+}

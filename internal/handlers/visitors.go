@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"net/url"
 
 	"github.com/gin-gonic/gin"
 	"github.com/kamva/mgm/v3"
@@ -14,7 +13,7 @@ import (
 )
 
 // TrackVisitor records a page visit (requires fingerprint)
-// POST /api/visitors
+// POST /api/visitors?pageId=xxx
 func TrackVisitor(c *gin.Context) {
 	fingerprint := c.GetHeader("fingerprint")
 	if fingerprint == "" {
@@ -22,32 +21,27 @@ func TrackVisitor(c *gin.Context) {
 		return
 	}
 
-	var pageID string = c.Query("pageId")
-
+	pageID := c.Query("pageId")
 	if pageID == "" {
 		errors.BadRequest("pageId is required").Response(c)
 		return
 	}
-	
-	// Extract domain from pageId
-	parsedURL, err := url.Parse("https://" + pageID)
+
+	domain, err := ExtractDomainFromPageID(pageID)
 	if err != nil {
 		errors.BadRequest("Invalid pageId").Response(c)
 		return
 	}
-	domain := parsedURL.Hostname()
 
-	// Check if visitor already exists
-	existingVisitor := &models.Visitor{}
+	// Upsert visitor (create if not exists)
 	query := bson.M{
 		"pageId":      pageID,
 		"fingerprint": fingerprint,
 		"domain":      domain,
 	}
 
-	err = mgm.Coll(existingVisitor).First(query, existingVisitor)
-	if err == mongo.ErrNoDocuments {
-		// No existing visit - create new one
+	existingVisitor := &models.Visitor{}
+	if err := mgm.Coll(existingVisitor).First(query, existingVisitor); err == mongo.ErrNoDocuments {
 		newVisitor := &models.Visitor{
 			PageID:      pageID,
 			Fingerprint: fingerprint,
@@ -62,53 +56,42 @@ func TrackVisitor(c *gin.Context) {
 		return
 	}
 
-	// Get total unique visitors for this page
 	count, err := mgm.Coll(&models.Visitor{}).CountDocuments(mgm.Ctx(), bson.M{"pageId": pageID})
 	if err != nil {
 		errors.ErrDatabaseError.Response(c)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"pageId": pageID,
-		"count":  count,
-	})
+	c.JSON(http.StatusOK, NewVisitorCountResponse(pageID, count))
 }
 
-// GetVisitorCount returns visitor count for a page (no tracking)
+// GetVisitorCount returns visitor count for a page
 // GET /api/visitors?pageId=xxx
 func GetVisitorCount(c *gin.Context) {
 	pageID := c.Query("pageId")
-
 	if pageID == "" {
 		errors.BadRequest("pageId is required").Response(c)
 		return
 	}
 
-	// Count unique visitors for this page
 	count, err := mgm.Coll(&models.Visitor{}).CountDocuments(mgm.Ctx(), bson.M{"pageId": pageID})
 	if err != nil {
 		errors.ErrDatabaseError.Response(c)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"pageId": pageID,
-		"count":  count,
-	})
+	c.JSON(http.StatusOK, NewVisitorCountResponse(pageID, count))
 }
 
 // GetVisitorsByDomain returns page view counts grouped by pageId for a domain
 // GET /api/visitors/domain?domain=xxx
 func GetVisitorsByDomain(c *gin.Context) {
 	domain := c.Query("domain")
-
 	if domain == "" {
 		errors.BadRequest("domain is required").Response(c)
 		return
 	}
 
-	// Get page view counts grouped by pageId, sorted by most viewed first
 	pipeline := mongo.Pipeline{
 		{{Key: "$match", Value: bson.M{"domain": domain}}},
 		{{Key: "$group", Value: bson.M{
@@ -130,26 +113,16 @@ func GetVisitorsByDomain(c *gin.Context) {
 	}
 	defer cursor.Close(mgm.Ctx())
 
-	var pages []struct {
-		PageID string `bson:"pageId" json:"pageId"`
-		Count  int    `bson:"count" json:"count"`
-	}
-
+	var pages []PageViewCount
 	if err := cursor.All(mgm.Ctx(), &pages); err != nil {
 		errors.ErrDatabaseError.Response(c)
 		return
 	}
 
-	// Return empty array if no pages found
+	// Ensure empty array instead of null
 	if pages == nil {
-		pages = []struct {
-			PageID string `bson:"pageId" json:"pageId"`
-			Count  int    `bson:"count" json:"count"`
-		}{}
+		pages = []PageViewCount{}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"domain": domain,
-		"pages":  pages,
-	})
+	c.JSON(http.StatusOK, NewDomainPagesResponse(domain, pages))
 }

@@ -144,7 +144,7 @@ func AddComment(cfg *config.Config) gin.HandlerFunc {
 		}
 
 		// Return 200 OK with _id instead of id
-		c.JSON(http.StatusOK, commentToResponse(comment))
+		c.JSON(http.StatusOK, CommentToResponse(comment))
 
 		// Send email notifications asynchronously (don't block the response)
 		go func() {
@@ -240,8 +240,7 @@ func DeleteComment(c *gin.Context) {
 		return
 	}
 
-	// Return same format as Node.js
-	c.JSON(http.StatusOK, gin.H{"_id": commentID})
+	c.JSON(http.StatusOK, NewDeletedResponse(commentID))
 }
 
 // ListCommentsBySite returns all comments for a site with pagination
@@ -298,12 +297,5 @@ func ListCommentsBySite(c *gin.Context) {
 		comments = []models.Comment{}
 	}
 
-	// Return paginated response (same format as Node.js)
-	c.JSON(http.StatusOK, gin.H{
-		"comments": commentsToResponse(comments),
-		"total":    total,
-		"limit":    limit,
-		"skip":     skip,
-		"hasMore":  int64(skip+len(comments)) < total,
-	})
+	c.JSON(http.StatusOK, NewPaginatedCommentsResponse(comments, total, limit, skip))
 }
