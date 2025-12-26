@@ -29,16 +29,6 @@ type Comment struct {
 
 	// Secret for guest deletion (not exposed in JSON)
 	Secret string `bson:"secret" json:"-"`
-
-	// Deprecated owner field (for backward compatibility)
-	Owner *CommentOwner `bson:"owner,omitempty" json:"owner,omitempty"`
-}
-
-// CommentOwner is the deprecated nested owner structure
-type CommentOwner struct {
-	Name     string `bson:"name" json:"name"`
-	Email    string `bson:"email" json:"email"`
-	Gravatar string `bson:"gravatar" json:"gravatar"`
 }
 
 // CollectionName returns the MongoDB collection name

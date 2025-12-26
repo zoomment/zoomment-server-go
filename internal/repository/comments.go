@@ -266,60 +266,6 @@ func getReplyCountsForComments(commentIds []string) (map[string]int, error) {
 	return countMap, nil
 }
 
-// GetCommentsWithReplies fetches comments with their replies in a SINGLE query
-// This solves the N+1 problem using MongoDB $lookup (like SQL JOIN)
-// DEPRECATED: Use GetPaginatedComments instead for the new API
-func GetCommentsWithReplies(pageID, domain string) ([]CommentWithReplies, error) {
-	// Build match condition
-	matchCondition := bson.M{"parentId": nil}
-	if pageID != "" {
-		matchCondition["pageId"] = pageID
-	} else if domain != "" {
-		matchCondition["domain"] = domain
-	}
-
-	// MongoDB Aggregation Pipeline
-	// This is like a series of data transformations
-	pipeline := mongo.Pipeline{
-		// Stage 1: Match top-level comments (no parent)
-		{{Key: "$match", Value: matchCondition}},
-
-		// Stage 2: Sort by creation date (newest first)
-		{{Key: "$sort", Value: bson.D{{Key: "createdAt", Value: -1}}}},
-
-		// Stage 3: Lookup (JOIN) replies from the same collection
-		{{Key: "$lookup", Value: bson.M{
-			"from": "comments", // Same collection (self-join)
-			"let":  bson.M{"parentId": bson.M{"$toString": "$_id"}}, // Convert ObjectID to string
-			"pipeline": mongo.Pipeline{
-				// Match replies where parentId equals this comment's ID
-				{{Key: "$match", Value: bson.M{
-					"$expr": bson.M{"$eq": bson.A{"$parentId", "$$parentId"}},
-				}}},
-				// Sort replies by date (newest first)
-				{{Key: "$sort", Value: bson.D{{Key: "createdAt", Value: -1}}}},
-			},
-			"as": "replies", // Output field name
-		}}},
-	}
-
-	// Execute aggregation
-	coll := mgm.Coll(&commentModel{})
-	cursor, err := coll.Aggregate(mgm.Ctx(), pipeline)
-	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(mgm.Ctx())
-
-	// Decode results
-	var comments []CommentWithReplies
-	if err := cursor.All(mgm.Ctx(), &comments); err != nil {
-		return nil, err
-	}
-
-	return comments, nil
-}
-
 // ToPublicResponse converts CommentWithReplies to public response
 // Matches Node.js getCommentPublicData() output exactly
 func (c *CommentWithReplies) ToPublicResponse(currentUserEmail string) CommentPublicResponse {
