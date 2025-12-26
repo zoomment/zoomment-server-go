@@ -33,6 +33,9 @@ func Setup(router *gin.Engine, cfg *config.Config) {
 
 		// Visitors routes
 		setupVisitorRoutes(api)
+
+		// Votes routes
+		setupVoteRoutes(api)
 	}
 }
 
@@ -46,6 +49,8 @@ func setupCommentRoutes(api *gin.RouterGroup, cfg *config.Config) {
 		comments.POST("/", handlers.AddComment(cfg))
 		comments.POST("", handlers.AddComment(cfg))
 		comments.DELETE("/:id", handlers.DeleteComment)
+		// Load more replies for a specific comment
+		comments.GET("/:commentId/replies", handlers.ListReplies)
 		// Node.js uses access('admin') for this route
 		comments.GET("/sites/:siteId", middleware.Access("admin"), handlers.ListCommentsBySite)
 	}
@@ -88,8 +93,24 @@ func setupVisitorRoutes(api *gin.RouterGroup) {
 	visitors := api.Group("/visitors")
 	{
 		// Register both with and without trailing slash since RedirectTrailingSlash is disabled
-		visitors.GET("/", handlers.ListVisitors)
-		visitors.GET("", handlers.ListVisitors)
+		visitors.GET("/", handlers.GetVisitorCount)
+		visitors.GET("", handlers.GetVisitorCount)
+		visitors.POST("/", handlers.TrackVisitor)
+		visitors.POST("", handlers.TrackVisitor)
+		visitors.GET("/domain", handlers.GetVisitorsByDomain)
+	}
+}
+
+// setupVoteRoutes configures /api/votes routes
+func setupVoteRoutes(api *gin.RouterGroup) {
+	votes := api.Group("/votes")
+	{
+		// Register both with and without trailing slash since RedirectTrailingSlash is disabled
+		votes.POST("/", handlers.Vote)
+		votes.POST("", handlers.Vote)
+		votes.GET("/", handlers.GetVotesBulk)
+		votes.GET("", handlers.GetVotesBulk)
+		votes.GET("/:commentId", handlers.GetVote)
 	}
 }
 

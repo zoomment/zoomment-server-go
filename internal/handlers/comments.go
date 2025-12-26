@@ -24,16 +24,16 @@ import (
 	"zoomment-server/internal/validators"
 )
 
-// ListComments returns comments for a page or domain
-// GET /api/comments?pageId=xxx or ?domain=xxx
-// Uses MongoDB aggregation to fetch comments WITH replies in a single query (solves N+1)
+// ListComments returns comments for a page or domain with pagination
+// GET /api/comments?pageId=xxx&limit=10&skip=0&sort=asc|desc
+// Returns parent comments with repliesCount for each
 func ListComments(c *gin.Context) {
 	pageID := c.Query("pageId")
 	domain := c.Query("domain")
 
 	// Validation: require at least one parameter
 	if pageID == "" && domain == "" {
-		errors.BadRequest("Bad request").Response(c)
+		errors.BadRequest("pageId or domain is required").Response(c)
 		return
 	}
 
@@ -43,28 +43,47 @@ func ListComments(c *gin.Context) {
 		return
 	}
 
-	// Fetch comments with replies in a SINGLE query (no N+1 problem!)
-	comments, err := repository.GetCommentsWithReplies(pageID, domain)
+	// Parse pagination parameters
+	limit, skip := repository.ParsePagination(c.Query("limit"), c.Query("skip"))
+	sortOrder := c.Query("sort")
+	if sortOrder != "desc" {
+		sortOrder = "asc" // Default to oldest first
+	}
+
+	// Fetch paginated comments with reply counts
+	response, err := repository.GetPaginatedComments(pageID, domain, limit, skip, sortOrder)
 	if err != nil {
 		logger.Error(err, "Failed to fetch comments")
 		errors.ErrDatabaseError.Response(c)
 		return
 	}
 
-	// Get current user email for "isOwn" flag
-	user := middleware.GetUser(c)
-	currentEmail := ""
-	if user != nil {
-		currentEmail = user.Email
+	c.JSON(http.StatusOK, response)
+}
+
+// ListReplies returns replies for a specific comment with pagination
+// GET /api/comments/:commentId/replies?limit=10&skip=0
+func ListReplies(c *gin.Context) {
+	commentID := c.Param("commentId")
+
+	// Validate comment ID format
+	if _, err := primitive.ObjectIDFromHex(commentID); err != nil {
+		errors.BadRequest("Invalid comment ID").Response(c)
+		return
 	}
 
-	// Convert to public response
-	result := make([]repository.CommentPublicResponse, 0, len(comments))
-	for _, comment := range comments {
-		result = append(result, comment.ToPublicResponse(currentEmail))
+	// Parse pagination parameters
+	limit, skip := repository.ParsePagination(c.Query("limit"), c.Query("skip"))
+
+	// Fetch replies
+	response, err := repository.GetRepliesForComment(commentID, limit, skip)
+	if err != nil {
+		logger.Error(err, "Failed to fetch replies")
+		errors.ErrDatabaseError.Response(c)
+		return
 	}
 
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, response)
 }
 
 // AddComment creates a new comment

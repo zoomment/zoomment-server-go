@@ -13,51 +13,27 @@ import (
 	"zoomment-server/internal/models"
 )
 
-// ListVisitors returns visitor count for a page and records the visit if fingerprint is provided
-// GET /api/visitors?pageId=xxx
-func ListVisitors(c *gin.Context) {
-	pageID := c.Query("pageId")
+// TrackVisitor records a page visit (requires fingerprint)
+// POST /api/visitors
+func TrackVisitor(c *gin.Context) {
 	fingerprint := c.GetHeader("fingerprint")
+	if fingerprint == "" {
+		errors.BadRequest("Fingerprint required for tracking").Response(c)
+		return
+	}
+
+	var pageID string = c.Query("pageId")
 
 	if pageID == "" {
 		errors.BadRequest("pageId is required").Response(c)
 		return
 	}
-
-	response, err := getPageVisitors(pageID, fingerprint)
-	if err != nil {
-		errors.ErrDatabaseError.Response(c)
-		return
-	}
-
-	c.JSON(http.StatusOK, response)
-}
-
-// getPageVisitors fetches visitor count and records visit if fingerprint provided
-func getPageVisitors(pageID, fingerprint string) (*models.VisitorCountResponse, error) {
-	// Record visit if fingerprint is provided
-	if fingerprint != "" {
-		if err := recordVisit(pageID, fingerprint); err != nil {
-			return nil, err
-		}
-	}
-
-	// Count unique visitors for this page
-	count, err := mgm.Coll(&models.Visitor{}).CountDocuments(mgm.Ctx(), bson.M{"pageId": pageID})
-	if err != nil {
-		return nil, err
-	}
-
-	return &models.VisitorCountResponse{
-		Count: int(count),
-	}, nil
-}
-
-// recordVisit records a visit for the given pageId and fingerprint (idempotent)
-func recordVisit(pageID, fingerprint string) error {
+	
+	// Extract domain from pageId
 	parsedURL, err := url.Parse("https://" + pageID)
 	if err != nil {
-		return err
+		errors.BadRequest("Invalid pageId").Response(c)
+		return
 	}
 	domain := parsedURL.Hostname()
 
@@ -77,9 +53,103 @@ func recordVisit(pageID, fingerprint string) error {
 			Fingerprint: fingerprint,
 			Domain:      domain,
 		}
-		return mgm.Coll(newVisitor).Create(newVisitor)
+		if err := mgm.Coll(newVisitor).Create(newVisitor); err != nil {
+			errors.ErrDatabaseError.Response(c)
+			return
+		}
+	} else if err != nil {
+		errors.ErrDatabaseError.Response(c)
+		return
 	}
 
-	// If visitor already exists or other error occurred, return it
-	return err
+	// Get total unique visitors for this page
+	count, err := mgm.Coll(&models.Visitor{}).CountDocuments(mgm.Ctx(), bson.M{"pageId": pageID})
+	if err != nil {
+		errors.ErrDatabaseError.Response(c)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"pageId": pageID,
+		"count":  count,
+	})
+}
+
+// GetVisitorCount returns visitor count for a page (no tracking)
+// GET /api/visitors?pageId=xxx
+func GetVisitorCount(c *gin.Context) {
+	pageID := c.Query("pageId")
+
+	if pageID == "" {
+		errors.BadRequest("pageId is required").Response(c)
+		return
+	}
+
+	// Count unique visitors for this page
+	count, err := mgm.Coll(&models.Visitor{}).CountDocuments(mgm.Ctx(), bson.M{"pageId": pageID})
+	if err != nil {
+		errors.ErrDatabaseError.Response(c)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"pageId": pageID,
+		"count":  count,
+	})
+}
+
+// GetVisitorsByDomain returns page view counts grouped by pageId for a domain
+// GET /api/visitors/domain?domain=xxx
+func GetVisitorsByDomain(c *gin.Context) {
+	domain := c.Query("domain")
+
+	if domain == "" {
+		errors.BadRequest("domain is required").Response(c)
+		return
+	}
+
+	// Get page view counts grouped by pageId, sorted by most viewed first
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.M{"domain": domain}}},
+		{{Key: "$group", Value: bson.M{
+			"_id":   "$pageId",
+			"count": bson.M{"$sum": 1},
+		}}},
+		{{Key: "$sort", Value: bson.M{"count": -1}}},
+		{{Key: "$project", Value: bson.M{
+			"pageId": "$_id",
+			"count":  1,
+			"_id":    0,
+		}}},
+	}
+
+	cursor, err := mgm.Coll(&models.Visitor{}).Aggregate(mgm.Ctx(), pipeline)
+	if err != nil {
+		errors.ErrDatabaseError.Response(c)
+		return
+	}
+	defer cursor.Close(mgm.Ctx())
+
+	var pages []struct {
+		PageID string `bson:"pageId" json:"pageId"`
+		Count  int    `bson:"count" json:"count"`
+	}
+
+	if err := cursor.All(mgm.Ctx(), &pages); err != nil {
+		errors.ErrDatabaseError.Response(c)
+		return
+	}
+
+	// Return empty array if no pages found
+	if pages == nil {
+		pages = []struct {
+			PageID string `bson:"pageId" json:"pageId"`
+			Count  int    `bson:"count" json:"count"`
+		}{}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"domain": domain,
+		"pages":  pages,
+	})
 }

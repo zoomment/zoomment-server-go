@@ -25,13 +25,19 @@ const docTemplate = `{
             "type": "apiKey",
             "in": "header",
             "name": "token"
+        },
+        "FingerprintAuth": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "fingerprint",
+            "description": "Browser fingerprint for anonymous tracking"
         }
     },
     "paths": {
         "/comments": {
             "get": {
                 "summary": "List comments",
-                "description": "Get comments for a page or domain",
+                "description": "Get comments for a page or domain with pagination",
                 "tags": ["Comments"],
                 "parameters": [
                     {
@@ -45,15 +51,54 @@ const docTemplate = `{
                         "in": "query",
                         "type": "string",
                         "description": "Domain name"
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "type": "integer",
+                        "default": 10,
+                        "description": "Number of comments to return (max 50)"
+                    },
+                    {
+                        "name": "skip",
+                        "in": "query",
+                        "type": "integer",
+                        "default": 0,
+                        "description": "Number of comments to skip"
+                    },
+                    {
+                        "name": "sort",
+                        "in": "query",
+                        "type": "string",
+                        "enum": ["asc", "desc"],
+                        "default": "asc",
+                        "description": "Sort order by date: asc (oldest first) or desc (newest first)"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "List of comments with replies",
+                        "description": "Paginated list of comments",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/Comment"
+                            "type": "object",
+                            "properties": {
+                                "comments": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/definitions/Comment"
+                                    }
+                                },
+                                "total": {
+                                    "type": "integer"
+                                },
+                                "limit": {
+                                    "type": "integer"
+                                },
+                                "skip": {
+                                    "type": "integer"
+                                },
+                                "hasMore": {
+                                    "type": "boolean"
+                                }
                             }
                         }
                     },
@@ -140,6 +185,63 @@ const docTemplate = `{
                 }
             }
         },
+        "/comments/{commentId}/replies": {
+            "get": {
+                "summary": "Get replies",
+                "description": "Get replies for a specific comment with pagination",
+                "tags": ["Comments"],
+                "parameters": [
+                    {
+                        "name": "commentId",
+                        "in": "path",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "type": "integer",
+                        "default": 10,
+                        "description": "Number of replies to return"
+                    },
+                    {
+                        "name": "skip",
+                        "in": "query",
+                        "type": "integer",
+                        "default": 0,
+                        "description": "Number of replies to skip"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated list of replies",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "replies": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/definitions/Comment"
+                                    }
+                                },
+                                "total": {
+                                    "type": "integer"
+                                },
+                                "limit": {
+                                    "type": "integer"
+                                },
+                                "skip": {
+                                    "type": "integer"
+                                },
+                                "hasMore": {
+                                    "type": "boolean"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/users/auth": {
             "post": {
                 "summary": "Request magic link",
@@ -177,7 +279,26 @@ const docTemplate = `{
                 "security": [{"ApiKeyAuth": []}],
                 "responses": {
                     "200": {
-                        "description": "User profile"
+                        "description": "User profile",
+                        "schema": {
+                            "$ref": "#/definitions/User"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    }
+                }
+            }
+        },
+        "/users": {
+            "delete": {
+                "summary": "Delete account",
+                "description": "Delete current user's account and their sites",
+                "tags": ["Users"],
+                "security": [{"ApiKeyAuth": []}],
+                "responses": {
+                    "200": {
+                        "description": "Account deleted"
                     },
                     "403": {
                         "description": "Forbidden"
@@ -193,7 +314,13 @@ const docTemplate = `{
                 "security": [{"ApiKeyAuth": []}],
                 "responses": {
                     "200": {
-                        "description": "List of sites"
+                        "description": "List of sites",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Site"
+                            }
+                        }
                     }
                 }
             },
@@ -218,13 +345,40 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Site created"
+                        "description": "Site created",
+                        "schema": {
+                            "$ref": "#/definitions/Site"
+                        }
                     },
                     "404": {
                         "description": "Meta tag not found"
                     },
                     "409": {
                         "description": "Site already exists"
+                    }
+                }
+            }
+        },
+        "/sites/{id}": {
+            "delete": {
+                "summary": "Delete site",
+                "description": "Delete a site by ID",
+                "tags": ["Sites"],
+                "security": [{"ApiKeyAuth": []}],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Site deleted"
+                    },
+                    "404": {
+                        "description": "Site not found"
                     }
                 }
             }
@@ -249,7 +403,10 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Reactions data"
+                        "description": "Reactions data",
+                        "schema": {
+                            "$ref": "#/definitions/Reaction"
+                        }
                     }
                 }
             },
@@ -257,6 +414,7 @@ const docTemplate = `{
                 "summary": "Add reaction",
                 "description": "Add or toggle a reaction",
                 "tags": ["Reactions"],
+                "security": [{"FingerprintAuth": []}],
                 "parameters": [
                     {
                         "name": "fingerprint",
@@ -280,7 +438,10 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Reaction updated"
+                        "description": "Reaction updated",
+                        "schema": {
+                            "$ref": "#/definitions/Reaction"
+                        }
                     }
                 }
             }
@@ -288,7 +449,7 @@ const docTemplate = `{
         "/visitors": {
             "get": {
                 "summary": "Get visitor count",
-                "description": "Get visitor count for a page. If fingerprint header is provided, records the visit (idempotent).",
+                "description": "Get visitor count for a page",
                 "tags": ["Visitors"],
                 "parameters": [
                     {
@@ -297,29 +458,186 @@ const docTemplate = `{
                         "required": true,
                         "type": "string",
                         "description": "Page identifier"
-                    },
-                    {
-                        "name": "fingerprint",
-                        "in": "header",
-                        "type": "string",
-                        "description": "Unique visitor identifier (optional, records visit if provided)"
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "Visitor count",
                         "schema": {
-                            "type": "object",
-                            "properties": {
-                                "count": {
-                                    "type": "integer",
-                                    "description": "Number of unique visitors for the page"
-                                }
-                            }
+                            "$ref": "#/definitions/Visitor"
                         }
                     },
                     "400": {
                         "description": "Bad request - pageId is required"
+                    }
+                }
+            },
+            "post": {
+                "summary": "Track visitor",
+                "description": "Track a page visitor (requires fingerprint)",
+                "tags": ["Visitors"],
+                "security": [{"FingerprintAuth": []}],
+                "parameters": [
+                    {
+                        "name": "fingerprint",
+                        "in": "header",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "required": ["pageId"],
+                            "properties": {
+                                "pageId": {"type": "string"}
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Visitor tracked",
+                        "schema": {
+                            "$ref": "#/definitions/Visitor"
+                        }
+                    },
+                    "400": {
+                        "description": "Fingerprint required"
+                    }
+                }
+            }
+        },
+        "/visitors/domain": {
+            "get": {
+                "summary": "Get visitors by domain",
+                "description": "Get page view counts grouped by pageId for a domain",
+                "tags": ["Visitors"],
+                "parameters": [
+                    {
+                        "name": "domain",
+                        "in": "query",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Page view counts by pageId",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "domain": {"type": "string"},
+                                "pages": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "pageId": {"type": "string"},
+                                            "count": {"type": "integer"}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/votes": {
+            "post": {
+                "summary": "Vote on comment",
+                "description": "Vote on a comment (upvote/downvote). Toggle off if same vote, update if opposite.",
+                "tags": ["Votes"],
+                "security": [{"FingerprintAuth": []}],
+                "parameters": [
+                    {
+                        "name": "fingerprint",
+                        "in": "header",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/VoteInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Vote recorded",
+                        "schema": {
+                            "$ref": "#/definitions/Vote"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error"
+                    },
+                    "404": {
+                        "description": "Comment not found"
+                    }
+                }
+            },
+            "get": {
+                "summary": "Get votes bulk",
+                "description": "Get votes for multiple comments",
+                "tags": ["Votes"],
+                "parameters": [
+                    {
+                        "name": "commentIds",
+                        "in": "query",
+                        "required": true,
+                        "type": "string",
+                        "description": "Comma-separated comment IDs"
+                    },
+                    {
+                        "name": "fingerprint",
+                        "in": "header",
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Vote counts per comment",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/definitions/Vote"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/votes/{commentId}": {
+            "get": {
+                "summary": "Get votes for comment",
+                "description": "Get vote counts for a single comment",
+                "tags": ["Votes"],
+                "parameters": [
+                    {
+                        "name": "commentId",
+                        "in": "path",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "name": "fingerprint",
+                        "in": "header",
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Vote counts",
+                        "schema": {
+                            "$ref": "#/definitions/Vote"
+                        }
                     }
                 }
             }
@@ -341,29 +659,13 @@ const docTemplate = `{
                     "type": "string",
                     "description": "Comment author name"
                 },
-                "email": {
-                    "type": "string",
-                    "description": "Comment author email"
-                },
                 "gravatar": {
                     "type": "string",
-                    "description": "Gravatar URL"
+                    "description": "Gravatar hash"
                 },
                 "body": {
                     "type": "string",
                     "description": "Comment body (HTML)"
-                },
-                "domain": {
-                    "type": "string",
-                    "description": "Domain where comment was posted"
-                },
-                "pageUrl": {
-                    "type": "string",
-                    "description": "Full page URL"
-                },
-                "pageId": {
-                    "type": "string",
-                    "description": "Page identifier"
                 },
                 "isVerified": {
                     "type": "boolean",
@@ -376,29 +678,79 @@ const docTemplate = `{
                 "owner": {
                     "type": "object",
                     "properties": {
-                        "name": {
-                            "type": "string"
-                        },
-                        "gravatar": {
-                            "type": "string"
-                        }
+                        "name": {"type": "string"},
+                        "gravatar": {"type": "string"}
                     }
                 },
                 "createdAt": {
                     "type": "string",
                     "format": "date-time"
                 },
-                "updatedAt": {
-                    "type": "string",
-                    "format": "date-time"
-                },
-                "replies": {
+                "repliesCount": {
+                    "type": "integer",
+                    "description": "Number of replies to this comment"
+                }
+            }
+        },
+        "User": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "name": {"type": "string"},
+                "email": {"type": "string", "format": "email"}
+            }
+        },
+        "Site": {
+            "type": "object",
+            "properties": {
+                "_id": {"type": "string"},
+                "domain": {"type": "string"},
+                "verified": {"type": "boolean"},
+                "createdAt": {"type": "string", "format": "date-time"}
+            }
+        },
+        "Reaction": {
+            "type": "object",
+            "properties": {
+                "aggregation": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/Comment"
-                    },
-                    "description": "Nested replies to this comment"
+                        "type": "object",
+                        "properties": {
+                            "_id": {"type": "string", "description": "Emoji"},
+                            "count": {"type": "integer"}
+                        }
+                    }
+                },
+                "userReaction": {
+                    "type": "string",
+                    "description": "Current user's reaction emoji"
                 }
+            }
+        },
+        "Visitor": {
+            "type": "object",
+            "properties": {
+                "pageId": {"type": "string"},
+                "count": {"type": "integer"}
+            }
+        },
+        "Vote": {
+            "type": "object",
+            "properties": {
+                "commentId": {"type": "string"},
+                "upvotes": {"type": "integer"},
+                "downvotes": {"type": "integer"},
+                "score": {"type": "integer", "description": "upvotes - downvotes"},
+                "userVote": {"type": "integer", "enum": [-1, 0, 1], "description": "Current user's vote"}
+            }
+        },
+        "VoteInput": {
+            "type": "object",
+            "required": ["commentId", "value"],
+            "properties": {
+                "commentId": {"type": "string"},
+                "value": {"type": "integer", "enum": [1, -1], "description": "1 = upvote, -1 = downvote"}
             }
         }
     }
@@ -419,4 +771,3 @@ var SwaggerInfo = &swag.Spec{
 func init() {
 	swag.Register(SwaggerInfo.InstanceName(), SwaggerInfo)
 }
-
