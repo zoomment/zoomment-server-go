@@ -244,8 +244,8 @@ func DeleteComment(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"_id": commentID})
 }
 
-// ListCommentsBySite returns all comments for a site
-// GET /api/comments/sites/:siteId
+// ListCommentsBySite returns all comments for a site with pagination
+// GET /api/comments/sites/:siteId?limit=10&skip=0
 func ListCommentsBySite(c *gin.Context) {
 	siteID := c.Param("siteId")
 	user := middleware.GetUser(c)
@@ -271,9 +271,22 @@ func ListCommentsBySite(c *gin.Context) {
 		return
 	}
 
-	// Find all comments for this domain
+	// Parse pagination parameters
+	limit, skip := repository.ParsePagination(c.Query("limit"), c.Query("skip"))
+
+	// Get total count
+	total, err := mgm.Coll(&models.Comment{}).CountDocuments(mgm.Ctx(), bson.M{"domain": site.Domain})
+	if err != nil {
+		errors.ErrDatabaseError.Response(c)
+		return
+	}
+
+	// Find comments for this domain with pagination
 	var comments []models.Comment
-	opts := options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}})
+	opts := options.Find().
+		SetSort(bson.D{{Key: "createdAt", Value: -1}}).
+		SetSkip(int64(skip)).
+		SetLimit(int64(limit))
 	err = mgm.Coll(&models.Comment{}).SimpleFind(&comments, bson.M{"domain": site.Domain}, opts)
 	if err != nil {
 		errors.ErrDatabaseError.Response(c)
@@ -285,6 +298,12 @@ func ListCommentsBySite(c *gin.Context) {
 		comments = []models.Comment{}
 	}
 
-	// Convert to response with _id instead of id
-	c.JSON(http.StatusOK, commentsToResponse(comments))
+	// Return paginated response (same format as Node.js)
+	c.JSON(http.StatusOK, gin.H{
+		"comments": commentsToResponse(comments),
+		"total":    total,
+		"limit":    limit,
+		"skip":     skip,
+		"hasMore":  int64(skip+len(comments)) < total,
+	})
 }

@@ -7,6 +7,7 @@ import (
 
 // commentToResponse converts a Comment model to a response map with _id
 // Includes secret for newly created comments (used in AddComment)
+// Note: Node.js doesn't have owner in schema, but some legacy data might have it
 func commentToResponse(comment *models.Comment) gin.H {
 	return gin.H{
 		"_id":        comment.ID.Hex(),
@@ -20,10 +21,9 @@ func commentToResponse(comment *models.Comment) gin.H {
 		"pageId":     comment.PageID,
 		"isVerified": comment.IsVerified,
 		"secret":     comment.Secret,
-		"owner":      comment.Owner,
 		"createdAt":  comment.CreatedAt,
 		"updatedAt":  comment.UpdatedAt,
-		"isOwn": 	  comment.Secret != "",
+		"isOwn":      comment.Secret != "",
 	}
 }
 

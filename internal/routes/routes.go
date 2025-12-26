@@ -70,8 +70,11 @@ func setupUserRoutes(api *gin.RouterGroup, cfg *config.Config) {
 func setupSiteRoutes(api *gin.RouterGroup, cfg *config.Config) {
 	sites := api.Group("/sites")
 	{
+		// Register both with and without trailing slash since RedirectTrailingSlash is disabled
 		sites.GET("/", middleware.Access("admin"), handlers.ListSites)
+		sites.GET("", middleware.Access("admin"), handlers.ListSites)
 		sites.POST("/", middleware.Access("admin"), handlers.AddSite(cfg))
+		sites.POST("", middleware.Access("admin"), handlers.AddSite(cfg))
 		sites.DELETE("/:id", middleware.Access("admin"), handlers.DeleteSite)
 	}
 }

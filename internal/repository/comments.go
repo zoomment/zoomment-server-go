@@ -42,13 +42,9 @@ type CommentWithReplies struct {
 }
 
 // CommentPublicResponse is what we send to clients
-// Matches Node.js API response format exactly
+// Matches Node.js getCommentPublicData() output exactly
 type CommentPublicResponse struct {
-	ID         primitive.ObjectID      `json:"_id"`
-	Owner      *struct {
-		Name     string `json:"name"`
-		Gravatar string `json:"gravatar"`
-	} `json:"owner,omitempty"`
+	ID           primitive.ObjectID      `json:"_id"`
 	IsOwn        bool                    `json:"isOwn"`
 	Body         string                  `json:"body"`
 	Author       string                  `json:"author"`
@@ -334,19 +330,10 @@ func (c *CommentWithReplies) ToPublicResponse(currentUserEmail string) CommentPu
 		Author:     c.Author,
 		Gravatar:   c.Gravatar,
 		Body:       c.Body,
-		ParentID:   c.ParentID, // Include parentId for Node.js compatibility
+		ParentID:   c.ParentID,
 		IsVerified: c.IsVerified,
 		IsOwn:      isOwn,
 		CreatedAt:  c.CreatedAt,
-	}
-
-	// Add owner for backward compatibility (same as Node.js)
-	response.Owner = &struct {
-		Name     string `json:"name"`
-		Gravatar string `json:"gravatar"`
-	}{
-		Name:     c.Author,
-		Gravatar: c.Gravatar,
 	}
 
 	// Convert replies
@@ -364,7 +351,7 @@ func (c *CommentWithReplies) ToPublicResponse(currentUserEmail string) CommentPu
 func (c *CommentWithReplies) ToPublicResponseWithoutReplies(currentUserEmail string) CommentPublicResponse {
 	isOwn := currentUserEmail != "" && currentUserEmail == c.Email
 
-	response := CommentPublicResponse{
+	return CommentPublicResponse{
 		ID:         c.ID,
 		Author:     c.Author,
 		Gravatar:   c.Gravatar,
@@ -374,17 +361,6 @@ func (c *CommentWithReplies) ToPublicResponseWithoutReplies(currentUserEmail str
 		IsOwn:      isOwn,
 		CreatedAt:  c.CreatedAt,
 	}
-
-	// Add owner for backward compatibility (same as Node.js)
-	response.Owner = &struct {
-		Name     string `json:"name"`
-		Gravatar string `json:"gravatar"`
-	}{
-		Name:     c.Author,
-		Gravatar: c.Gravatar,
-	}
-
-	return response
 }
 
 // commentModel is a helper struct for mgm.Coll()

@@ -79,8 +79,8 @@ func AuthUser(cfg *config.Config) gin.HandlerFunc {
 			}
 		}()
 
-		// Return empty object (same as Node.js)
-		c.JSON(http.StatusOK, gin.H{})
+		// Return same format as Node.js
+		c.JSON(http.StatusOK, gin.H{"message": "Magic link sent to your email"})
 	}
 }
 

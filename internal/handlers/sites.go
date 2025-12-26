@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/kamva/mgm/v3"
@@ -19,6 +20,37 @@ import (
 	"zoomment-server/internal/validators"
 )
 
+// SiteResponse is the JSON response format for sites (uses _id instead of id)
+type SiteResponse struct {
+	ID        string    `json:"_id"`
+	UserID    string    `json:"userId"`
+	Domain    string    `json:"domain"`
+	Verified  bool      `json:"verified"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// siteToResponse converts a Site model to response format with _id
+func siteToResponse(site *models.Site) SiteResponse {
+	return SiteResponse{
+		ID:        site.ID.Hex(),
+		UserID:    site.UserID.Hex(),
+		Domain:    site.Domain,
+		Verified:  site.Verified,
+		CreatedAt: site.CreatedAt,
+		UpdatedAt: site.UpdatedAt,
+	}
+}
+
+// sitesToResponse converts a slice of sites to response format
+func sitesToResponse(sites []models.Site) []SiteResponse {
+	result := make([]SiteResponse, 0, len(sites))
+	for _, site := range sites {
+		result = append(result, siteToResponse(&site))
+	}
+	return result
+}
+
 // ListSites returns all sites for the current user
 // GET /api/sites
 func ListSites(c *gin.Context) {
@@ -32,7 +64,12 @@ func ListSites(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, sites)
+	// Return empty array instead of null when no sites found
+	if sites == nil {
+		sites = []models.Site{}
+	}
+
+	c.JSON(http.StatusOK, sitesToResponse(sites))
 }
 
 // AddSite registers a new site after verifying ownership via meta tag
@@ -89,7 +126,7 @@ func AddSite(cfg *config.Config) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, site)
+		c.JSON(http.StatusOK, siteToResponse(site))
 	}
 }
 
