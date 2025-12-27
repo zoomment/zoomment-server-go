@@ -1,12 +1,8 @@
 package models
 
-import (
-	"github.com/kamva/mgm/v3"
-)
-
 // Reaction represents a user's reaction (emoji) on a page
 type Reaction struct {
-	mgm.DefaultModel `bson:",inline"`
+	BaseModel `bson:",inline"`
 
 	Fingerprint string `bson:"fingerprint" json:"fingerprint"`
 	Domain      string `bson:"domain" json:"domain"`
@@ -23,10 +19,4 @@ func (r *Reaction) CollectionName() string {
 type ReactionAggregation struct {
 	Reaction string `bson:"_id" json:"_id"`
 	Count    int    `bson:"count" json:"count"`
-}
-
-// PageReactionsResponse is the response format for getting page reactions
-type PageReactionsResponse struct {
-	Aggregation  []ReactionAggregation `json:"aggregation"`
-	UserReaction *string               `json:"userReaction"`
 }

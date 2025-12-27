@@ -1,12 +1,8 @@
 package models
 
-import (
-	"github.com/kamva/mgm/v3"
-)
-
 // Comment represents a comment on a page
 type Comment struct {
-	mgm.DefaultModel `bson:",inline"`
+	BaseModel `bson:",inline"`
 
 	// ParentID for threaded replies (nil = top-level comment)
 	ParentID *string `bson:"parentId,omitempty" json:"parentId,omitempty"`

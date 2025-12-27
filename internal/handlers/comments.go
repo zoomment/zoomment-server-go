@@ -129,11 +129,6 @@ func AddComment(cfg *config.Config) gin.HandlerFunc {
 			ParentID:   req.ParentID,
 			IsVerified: isVerified,
 			Secret:     utils.GenerateSecret(),
-			Owner: &models.CommentOwner{
-				Name:     author,
-				Email:    email,
-				Gravatar: utils.GenerateGravatar(email),
-			},
 		}
 
 		err = mgm.Coll(comment).Create(comment)
